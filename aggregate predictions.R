@@ -93,14 +93,6 @@ data<-as_tibble(data)
 data$AGS<-as.character(as.integer(data$AGS))
 
 
-#gpkg
-for (i in 4138:4373){
-  pts <- read_sf(paste0("Floor level predictions_",i,".gpkg"))
-  write_sf(pts,"Predictions VII.gpkg",append=TRUE)
-  print(paste("current chunk:",i,round(i/4200*100,1),"% completed."))
-}
-
-
 #load all csvs
 files <- list.files(pattern = glob2rx("Final predictions*.csv"))
 
