@@ -45,13 +45,15 @@ foreach::getDoParRegistered()
 #how many workers are available? (optional)
 foreach::getDoParWorkers()
 
+
+#chunk-wise calculation
 foreach(
   j = c(1:4400),
   .packages = c("sf","plyr","dplyr","stars","raster","rriskDistributions","EnvStats")
 ) %dopar% {
   
   #load building data in chunks of 5000 buildings
-  EW_data <- st_read("Haushalte_Einwohner.gpkg",
+  EW_data <- st_read("Haushalte_Einwohner.gpkg",  #Haushalte_Einwohner.gpkg is the building data set with ~22 million German building 
                      query=paste("select * from Haushalte_Einwohner LIMIT ",5000, "OFFSET ",(j-1)*5000))
   
   Est_data<-EW_data[,c("ID","Strasse","Hn","PLZ","Ort","Einwohner","Haushalte","Etagen","Baujahrsklasse",
@@ -92,7 +94,7 @@ foreach(
   Est_data$type<-as.factor((Est_data$Charakteristik))
   Est_data$type <- mapvalues(Est_data$Charakteristik, 
                              from = c('1','2','3',"4","5","6","7","8","9"), 
-                             to = c("EFH/ZFH", "RH/DHH","MFH","WB","WHH","TH","BH","Büro","Gewerbe"))
+                             to = c("EFH/ZFH", "RH/DHH","MFH","WB","WHH","TH","BH","BÃ¼ro","Gewerbe"))
   Est_data$type<-as.factor(Est_data$type)
   summary(Est_data$type)
   
@@ -129,7 +131,10 @@ foreach(
   AGS_nearest<-VG_GEM[nearest,"AGS"]
   st_geometry(AGS_nearest)<-NULL
   Est_data$AGS[which(is.na(Est_data$AGS))]<-as.factor(AGS_nearest$AGS)}
-  
+
+
+  base_EFH = 0.3 # basement occupation in single- and two-family houses 
+  base_MFH = 0.05 # basement occupation in multi-family house; apartment building; high-rise apartment building; terrace house; farm house; office building
   #duplicate rows based on floor level count
   i=1
   nr_fl<-Est_data$Etagen[i] #number of floor levels
@@ -139,12 +144,12 @@ foreach(
   data$fl[1:rep] <- seq(-1,fl_max,1) #fill floor level data
   EW<-Est_data$Einwohner[i] #Anzahl Einwohner
   if(Est_data$type[i] %in% c("EFH/ZFH","RH/DHH")){ #30 % weighting basement
-    data$fl_EW[data$fl==-1] <- 0.3*EW/(nr_fl+0.3)
-    data$fl_EW[data$fl>=0] <- EW/(nr_fl+0.3)
+    data$fl_EW[data$fl==-1] <- base_EFH *EW/(nr_fl+base_EFH )
+    data$fl_EW[data$fl>=0] <- EW/(nr_fl+base_EFH )
   }
   if(!Est_data$type[i] %in% c("EFH/ZFH","RH/DHH")){
-    data$fl_EW[data$fl==-1] <- 0.05*EW/(nr_fl+0.05) #5 % weighting basement
-    data$fl_EW[data$fl>=0] <- EW/(nr_fl+0.05)
+    data$fl_EW[data$fl==-1] <- base_MFH*EW/(nr_fl+base_MFH) #5 % weighting basement
+    data$fl_EW[data$fl>=0] <- EW/(nr_fl+base_MFH)
   }
   for (i in 2:nrow(Est_data)){
     nr_fl<-Est_data$Etagen[i] #number of floor levels
@@ -154,12 +159,12 @@ foreach(
     new$fl[1:rep] <- seq(-1,fl_max,1) #fill floor level data
     EW<-Est_data$Einwohner[i] #Anzahl Einwohner
     if(Est_data$type[i] %in% c("EFH/ZFH","RH/DHH")){ #30 % weighting basement
-      new$fl_EW[new$fl==-1] <- 0.3*EW/(nr_fl+0.3)
-      new$fl_EW[new$fl>=0] <- EW/(nr_fl+0.3)
+      new$fl_EW[new$fl==-1] <- base_EFH *EW/(nr_fl+base_EFH )
+      new$fl_EW[new$fl>=0] <- EW/(nr_fl+base_EFH )
     }
     if(!Est_data$type[i] %in% c("EFH/ZFH","RH/DHH")){
-      new$fl_EW[new$fl==-1] <- 0.05*EW/(nr_fl+0.05) #5 % weighting basement
-      new$fl_EW[new$fl>=0] <- EW/(nr_fl+0.05)
+      new$fl_EW[new$fl==-1] <- base_MFH*EW/(nr_fl+base_MFH) #5 % weighting basement
+      new$fl_EW[new$fl>=0] <- EW/(nr_fl+base_MFH)
     }
     data<-rbind(data,new)  #merge data
     #gc()
@@ -169,13 +174,13 @@ foreach(
   #convert floor levels
   data$Etage<-cut(data$fl,breaks=c(-2,-1,0,1,2,1000),right=TRUE)
   data$Etage <- mapvalues(data$Etage,from = c("(-2,-1]","(-1,0]","(0,1]","(1,2]","(2,1e+03]"), 
-                          to = c("Keller","Erdgeschoss","1. Etage","2. Etage","3. Etage oder höher"))
+                          to = c("Keller","Erdgeschoss","1. Etage","2. Etage","3. Etage oder hÃ¶her"))
   
   
   ###predict
   
-  percentile<- c(0.1, 0.25, 0.5, 0.75,0.8,0.85,0.9,0.95,0.98)
-  myQuantile <- function(y, w) quantile(rep(y, w), probs = percentile)
+  percentile<- c(0.1, 0.25, 0.5, 0.75,0.8,0.85,0.9,0.95,0.98) #define desired percentiles
+  myQuantile <- function(y, w) quantile(rep(y, w), probs = percentile) # create quantile function
   
   #make prediction 
   pred <- predict(mod,newdata=data,type="response",FUN=myQuantile)  #make prediction
@@ -183,7 +188,7 @@ foreach(
   #cbind data and pred
   data<-cbind(data,pred)
   
-  #Outdoor Rn  -< check if RnOut is lower than 10 %ile, then set Rnout at 1 Bq/m³ lower than OutdoorRn
+  #Outdoor Rn  -< check if RnOut is lower than 10 %ile, then set Rnout at 1 Bq/mÂ³ lower than OutdoorRn
   RnOut.ex<-st_extract(Rn_O,data)
   data$RnOut<-RnOut.ex$RnOut_1_0
   
