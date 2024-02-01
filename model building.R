@@ -35,12 +35,12 @@ spatial_blocks<-spatial_blocks[1:10]
 
 #control parameters
 fitControl <- trainControl(
-  method = 'repeatedcv',            # cross validation
-  number = 10,
+  method = 'repeatedcv',              # cross validation
+  number = 10,           
   repeats=1,
-  savePredictions = 'final',       # saves predictions for optimal tuning parameter
-  summaryFunction=mySummary,  # results summary function
-  index =spatial_blocks                     # indices of training data_10p over 10 folds, repeated 5 times
+  savePredictions = 'final',          # saves predictions for optimal tuning parameter
+  summaryFunction=mySummary,          # results summary function
+  index =spatial_blocks               # indices of training data over 10 folds, repeated 5 times
 )
 
 
@@ -82,9 +82,7 @@ load("FFS IRC.R")
 rfGrid<-expand.grid(mtry=seq(2,12,1))
 
 #selected vars
-
 st_geometry(IRC.data.BKG)<-NULL
-
 vars<-FFS_RF_IRC$selectedvars
 include<-which(names(IRC.data.BKG)%in%vars)   # find column numbers with specific column names
 
@@ -103,11 +101,6 @@ Tune_RF_GRP <-train(
   controls = cforest_unbiased(ntree = 100, trace = TRUE)
 ) 
 
-
-
 #FINAL model 
-ntree<-c(500)
-rfGrid<-expand.grid(mtry=4)
-
 mod <- partykit::cforest(Radon ~ ., data = IRC.data.BKG[,include],ntree=500,mtry=4,trace=TRUE)
 #save(mod,file="IRC model.R") 
